@@ -96,13 +96,30 @@ class Server internal constructor() : IService.Stub() {
                 forceValFile.readText().trim().toLong().let {
                     if (it > intervalMs || it == 0L) {
                         LoggerX.i<Server>("unlockOPlusSampleTimeLimit: 解锁欧加功率采样频率: ${intervalMs}Ms")
-                        forceActiveFile.writeText("1\n")
-                        forceValFile.writeText("$intervalMs\n")
+                        writeProcText(forceActiveFile.absolutePath, "1\n")
+                        writeProcText(forceValFile.absolutePath, "$intervalMs\n")
                     }
                 }
             }
         } catch (e: Exception) {
             LoggerX.w<Server>("解锁欧加功率采样频率限制时失败", tr = e)
+        }
+    }
+
+    /**
+     * 直接通过 fd 向 proc 节点写入文本，避免 `File.writeText()` 在目标节点上的额外行为。
+     *
+     * @param path proc 节点绝对路径
+     * @param content 写入内容，调用方负责决定是否包含换行
+     * @return 无返回值；写入失败时直接抛出异常，由上层统一记录日志
+     */
+    private fun writeProcText(path: String, content: String) {
+        val fd = Os.open(path, OsConstants.O_WRONLY, 0)
+        try {
+            val bytes = content.toByteArray(Charsets.UTF_8)
+            Os.write(fd, bytes, 0, bytes.size)
+        } finally {
+            Os.close(fd)
         }
     }
 
