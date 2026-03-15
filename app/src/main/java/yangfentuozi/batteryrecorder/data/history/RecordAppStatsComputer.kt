@@ -40,7 +40,6 @@ object RecordAppStatsComputer {
     ): List<RecordAppStatsEntry> {
         if (records.size < 2) return emptyList()
 
-        val maxGapMs = DischargeRecordScanner.computeMaxGapMs(recordIntervalMs)
         val statsMap = LinkedHashMap<GroupKey, MutableRecordAppStats>()
         var previous: LineRecord? = null
 
@@ -50,7 +49,7 @@ object RecordAppStatsComputer {
             if (previousRecord == null) return@forEach
 
             val durationMs = current.timestamp - previousRecord.timestamp
-            if (durationMs !in 1..maxGapMs) return@forEach
+            if (durationMs <= 0L) return@forEach
 
             val groupKey = resolveGroupKey(previousRecord) ?: return@forEach
             val stats = statsMap.getOrPut(groupKey) { MutableRecordAppStats() }
