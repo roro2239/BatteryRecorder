@@ -35,7 +35,8 @@ object RecordDetailPowerStatsComputer {
             val durationMs = current.timestamp - previousRecord.timestamp
             if (durationMs <= 0L) return@forEach
 
-            val energyRawMs = previousRecord.power * durationMs
+            val energyRawMs =
+                (previousRecord.power.toDouble() + current.power.toDouble()) * 0.5 * durationMs
             totalDurationMs += durationMs
             totalEnergyRawMs += energyRawMs
 

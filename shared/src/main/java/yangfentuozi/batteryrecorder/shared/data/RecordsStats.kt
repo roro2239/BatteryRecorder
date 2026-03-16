@@ -73,13 +73,17 @@ data class RecordsStats(
                 val prevRecord = previousRecord
                 if (prevRecord != null) {
                     val dt = record.timestamp - prevRecord.timestamp
+                    if (dt <= 0L) {
+                        previousRecord = record
+                        return@forEachValidRecord
+                    }
                     if (prevRecord.isDisplayOn == 1) {
                         screenOnTime += dt
                     } else {
                         screenOffTime += dt
                     }
 
-                    totalEnergy += prevRecord.power * dt
+                    totalEnergy += (prevRecord.power.toDouble() + record.power.toDouble()) * 0.5 * dt
                     totalDuration += dt
                 }
                 previousRecord = record
