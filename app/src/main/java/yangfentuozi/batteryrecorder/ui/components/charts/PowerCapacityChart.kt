@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -44,6 +46,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -52,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -201,6 +205,42 @@ private data class FullscreenStaticChartLayout(
     val appIconPlacements: List<AppIconPlacement>,
 )
 
+private data class NormalStaticChartLayerLayout(
+    val coords: ChartCoordinates,
+    val powerPath: Path?,
+    val capacityPath: Path?,
+    val tempPath: Path?,
+    val appIconPlacements: List<AppIconPlacement>,
+    val screenStatePaths: ScreenStatePaths?,
+    val capacityMarkerLayouts: List<TextPointMarkerLayout>,
+    val tempMarkerLayouts: List<TextPointMarkerLayout>,
+    val peakAnnotationLayout: PeakAnnotationLayout?,
+)
+
+private data class ScreenStatePaths(
+    val screenOnPath: Path?,
+    val screenOffPath: Path?,
+)
+
+private data class TextPointMarkerLayout(
+    val center: Offset,
+    val label: String,
+    val labelX: Float,
+    val labelBaselineY: Float,
+)
+
+private data class PeakAnnotationLayout(
+    val peakY: Float,
+    val label: String,
+    val labelX: Float,
+    val labelBaselineY: Float,
+)
+
+private data class PeakPowerDisplay(
+    val peakPlotPowerW: Double,
+    val label: String,
+)
+
 /** 功率-电量图表（当前仅服务记录详情页单一场景）。 */
 @Composable
 fun PowerCapacityChart(
@@ -342,18 +382,29 @@ fun PowerCapacityChart(
         }
     }
 
-    // 预计算峰值标签文本，用于动态调整右侧 padding
-    val peakLabelText =
-        remember(activePowerPoints, isNegativeMode, curveVisibility.powerCurveMode) {
-            if (!hasVisiblePowerCurve) return@remember null
-            val peakPlotPowerW = activePowerPoints.maxOfOrNull {
-                selectPowerValueForChart(it, curveVisibility.powerCurveMode, isNegativeMode)
-            } ?: return@remember null
-            String.format(
+    val powerValueSelector = remember(
+        curveVisibility.powerCurveMode,
+        isNegativeMode,
+        minPower,
+        maxPower
+    ) {
+        { point: RecordDetailChartPoint ->
+            selectPowerValueForChart(point, curveVisibility.powerCurveMode, isNegativeMode)
+                .coerceIn(minPower, maxPower)
+        }
+    }
+    // 峰值文本和峰值高度统一提前计算，避免静态层与全屏层在 onDraw 中重复扫描曲线点。
+    val peakDisplay = remember(activePowerPoints, powerValueSelector, hasVisiblePowerCurve, isNegativeMode) {
+        if (!hasVisiblePowerCurve) return@remember null
+        val peakPlotPowerW = activePowerPoints.maxOfOrNull(powerValueSelector) ?: return@remember null
+        PeakPowerDisplay(
+            peakPlotPowerW = peakPlotPowerW,
+            label = String.format(
                 Locale.getDefault(),
                 "%.2f W",
                 if (isNegativeMode) -peakPlotPowerW else peakPlotPowerW
             )
+        )
     }
 
     val density = LocalDensity.current
@@ -383,24 +434,13 @@ fun PowerCapacityChart(
             .toSet()
     }
 
-    // 预计算功率轴标签最左侧位置，用于 SelectedPointInfo 对齐
-    val powerAxisStartDp = remember(filteredPoints, powerAxisConfig) {
-        with(density) {
-            val gapPx = 8.dp.toPx()
-            val textPaint = createTextPaint(0, 24f)
-            val minP = powerAxisConfig.minValue
-            val maxP = powerAxisConfig.maxValue
-            val maxLabelWidth = listOf(minP, maxP)
-                .maxOf { textPaint.measureText(String.format(Locale.getDefault(), "%.0f W", it)) }
-            (paddingLeftPx - maxLabelWidth - gapPx).coerceAtLeast(0f).toDp()
-        }
-    }
+    val selectedPointInfoPadding = 4.dp
 
     // 根据峰值标签宽度动态计算右侧 padding
-    val paddingRightDp = remember(peakLabelText) {
-        if (peakLabelText == null) 32.dp
+    val paddingRightDp = remember(peakDisplay) {
+        if (peakDisplay == null) 32.dp
         else with(density) {
-            val reservedPx = createTextPaint(0, 24f).measureText(peakLabelText) + 8.dp.toPx()
+            val reservedPx = createTextPaint(0, 24f).measureText(peakDisplay.label) + 8.dp.toPx()
             reservedPx.toDp().coerceAtLeast(32.dp)
         }
     }
@@ -444,6 +484,93 @@ fun PowerCapacityChart(
                 .coerceIn(0f, fullscreenMaxOffsetPx)
         }
     }
+    val normalStaticLayout = remember(
+        isStaticFullscreen,
+        chartWidthPx,
+        chartHeightPx,
+        paddingLeftPx,
+        paddingTopPx,
+        renderFilteredPoints,
+        activePowerPoints,
+        renderRawPoints,
+        visibleAppPoints,
+        curveVisibility,
+        packageFirstTimestamps,
+        appIconSizePx,
+        capacityMarkers,
+        tempMarkerPoints,
+        peakDisplay,
+        powerValueSelector,
+        minPower,
+        maxPower,
+        minTemp,
+        maxTemp,
+        canvasSize
+    ) {
+        if (isStaticFullscreen || chartWidthPx <= 0f || chartHeightPx <= 0f) {
+            null
+        } else {
+            val coords = ChartCoordinates(
+                paddingLeft = paddingLeftPx,
+                paddingTop = paddingTopPx,
+                chartWidth = chartWidthPx,
+                chartHeight = chartHeightPx,
+                minTime = viewportStart,
+                maxTime = viewportEnd,
+                minPower = minPower,
+                maxPower = maxPower,
+                minTemp = minTemp,
+                maxTemp = maxTemp,
+                contentWidth = chartWidthPx,
+                contentOffsetPx = 0f
+            )
+            NormalStaticChartLayerLayout(
+                coords = coords,
+                powerPath = if (hasVisiblePowerCurve) {
+                    buildPowerPath(
+                        points = activePowerPoints,
+                        coords = coords,
+                        valueSelector = powerValueSelector,
+                        smooth = curveVisibility.powerCurveMode == PowerCurveMode.Fitted
+                    )
+                } else {
+                    null
+                },
+                capacityPath = if (curveVisibility.showCapacity) {
+                    buildCapacityPath(renderFilteredPoints, coords) { it.capacity.toDouble() }
+                } else {
+                    null
+                },
+                tempPath = if (curveVisibility.showTemp) {
+                    buildTempPath(renderFilteredPoints, coords) { it.temp.toDouble() }
+                } else {
+                    null
+                },
+                appIconPlacements = computeAppIconPlacements(
+                    points = visibleAppPoints,
+                    viewportStart = viewportStart,
+                    viewportEnd = viewportEnd,
+                    chartLeft = paddingLeftPx,
+                    chartTop = paddingTopPx,
+                    chartWidth = chartWidthPx,
+                    chartHeight = chartHeightPx,
+                    iconSizePx = appIconSizePx.toFloat(),
+                    packageFirstTimestamps = packageFirstTimestamps
+                ),
+                screenStatePaths = buildScreenStatePaths(renderRawPoints, coords, density),
+                capacityMarkerLayouts = buildCapacityMarkerLayouts(capacityMarkers, coords, density),
+                tempMarkerLayouts = buildTempMarkerLayouts(tempMarkerPoints, coords, density),
+                peakAnnotationLayout = peakDisplay?.let { peak ->
+                    buildPeakAnnotationLayout(
+                        peakDisplay = peak,
+                        coords = coords,
+                        canvasWidthPx = canvasSize.width.toFloat(),
+                        density = density
+                    )
+                }
+            )
+        }
+    }
     val fullscreenStaticLayout = remember(
         isStaticFullscreen,
         chartWidthPx,
@@ -460,8 +587,8 @@ fun PowerCapacityChart(
         maxTemp,
         packageFirstTimestamps,
         appIconSizePx,
-        isNegativeMode,
-        hasVisiblePowerCurve
+        hasVisiblePowerCurve,
+        powerValueSelector
     ) {
         if (!isStaticFullscreen || chartWidthPx <= 0f || chartHeightPx <= 0f) {
             null
@@ -484,10 +611,6 @@ fun PowerCapacityChart(
                 filteredTrendPoints
             } else {
                 filteredPoints
-            }
-            val powerValueSelector: (RecordDetailChartPoint) -> Double = { point ->
-                selectPowerValueForChart(point, curveVisibility.powerCurveMode, isNegativeMode)
-                    .coerceIn(minPower, maxPower)
             }
             FullscreenStaticChartLayout(
                 baseCoords = baseCoords,
@@ -537,6 +660,196 @@ fun PowerCapacityChart(
         }
     }
     val appIcons = rememberAppIconBitmaps(appIconPackages, appIconSizePx)
+    val normalStaticLayerDrawBlock: DrawScope.() -> Unit = remember(
+        normalStaticLayout,
+        appIcons,
+        showAppIcons,
+        appIconClipPath,
+        curveVisibility,
+        activePowerPoints,
+        powerValueSelector,
+        hasVisiblePowerCurve,
+        powerAxisConfig,
+        gridColor,
+        axisLabelColor,
+        powerColor,
+        capacityColor,
+        tempColor,
+        screenOnColor,
+        screenOffColor,
+        peakLineColor,
+        strokeWidth,
+        useFivePercentTimeGrid,
+        viewportStart,
+        viewportEnd
+    ) {
+        val layout = normalStaticLayout ?: return@remember {}
+        val coords = layout.coords
+        val verticalGridSegments = if (useFivePercentTimeGrid) 20 else 4
+        val timeLabelSegments = if (useFivePercentTimeGrid) 20 else 4
+        val timeLabelStep = if (useFivePercentTimeGrid) 4 else 1
+        {
+            drawVerticalGridLines(coords, gridColor, verticalGridSegments, viewportStart, viewportEnd)
+            if (hasVisiblePowerCurve) {
+                drawFixedPowerGridLines(
+                    coords,
+                    gridColor,
+                    powerAxisConfig.majorStepW,
+                    powerAxisConfig.minorStepW
+                )
+                drawFixedPowerAxisLabels(
+                    coords,
+                    axisLabelColor,
+                    powerAxisConfig.majorStepW,
+                    powerAxisConfig.minorStepW,
+                    if (isNegativeMode) -1 else 1
+                )
+            }
+            drawTimeAxisLabels(
+                coords,
+                axisLabelColor,
+                { value -> formatDateTime(value) },
+                timeLabelSegments,
+                timeLabelStep,
+                viewportStart,
+                viewportEnd
+            )
+
+            clipRect(
+                left = coords.paddingLeft,
+                top = coords.paddingTop,
+                right = coords.paddingLeft + coords.chartWidth,
+                bottom = coords.paddingTop + coords.chartHeight
+            ) {
+                layout.tempPath?.let { path ->
+                    drawPath(
+                        path = path,
+                        color = tempColor,
+                        style = Stroke(
+                            width = strokeWidth.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+                }
+                layout.powerPath?.let { path ->
+                    drawPath(
+                        path = path,
+                        color = powerColor,
+                        style = Stroke(
+                            width = strokeWidth.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+                }
+                layout.capacityPath?.let { path ->
+                    drawPath(
+                        path = path,
+                        color = capacityColor,
+                        style = Stroke(
+                            width = strokeWidth.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+                }
+                if (activePowerPoints.size == 1) {
+                    // 单点数据无法形成 path，这里补绘圆点，避免“有数据但图上什么都没有”。
+                    val point = activePowerPoints.first()
+                    val pointX = coords.timeToX(point.timestamp)
+                    if (curveVisibility.showTemp) {
+                        drawCircle(
+                            tempColor,
+                            radius = 2.8.dp.toPx(),
+                            center = Offset(pointX, coords.tempToY(point.temp.toDouble()))
+                        )
+                    }
+                    if (hasVisiblePowerCurve) {
+                        drawCircle(
+                            powerColor,
+                            radius = 2.8.dp.toPx(),
+                            center = Offset(
+                                pointX,
+                                coords.powerToY(powerValueSelector(point))
+                            )
+                        )
+                    }
+                    if (curveVisibility.showCapacity) {
+                        drawCircle(
+                            capacityColor,
+                            radius = 2.8.dp.toPx(),
+                            center = Offset(
+                                pointX,
+                                coords.capacityToY(point.capacity.toDouble())
+                            )
+                        )
+                    }
+                }
+            }
+
+            layout.peakAnnotationLayout?.let { peakLayout ->
+                drawPeakAnnotation(peakLayout, coords, peakLineColor)
+            }
+            if (layout.capacityMarkerLayouts.isNotEmpty()) {
+                clipRect(
+                    left = coords.paddingLeft,
+                    top = coords.paddingTop,
+                    right = coords.paddingLeft + coords.chartWidth,
+                    bottom = coords.paddingTop + coords.chartHeight
+                ) {
+                    drawTextPointMarkerLayouts(layout.capacityMarkerLayouts, capacityColor)
+                }
+            }
+            if (layout.tempMarkerLayouts.isNotEmpty()) {
+                clipRect(
+                    left = coords.paddingLeft,
+                    top = coords.paddingTop,
+                    right = coords.paddingLeft + coords.chartWidth,
+                    bottom = coords.paddingTop + coords.chartHeight
+                ) {
+                    drawTextPointMarkerLayouts(layout.tempMarkerLayouts, tempColor)
+                }
+            }
+            layout.screenStatePaths?.let { screenPaths ->
+                clipRect(
+                    left = coords.paddingLeft,
+                    top = 0f,
+                    right = coords.paddingLeft + coords.chartWidth,
+                    bottom = size.height
+                ) {
+                    drawScreenStatePaths(
+                        screenPaths,
+                        screenOnColor = screenOnColor,
+                        screenOffColor = screenOffColor,
+                        strokeWidth = 4.dp
+                    )
+                }
+            }
+
+            if (showAppIcons) {
+                clipRect(
+                    left = coords.paddingLeft,
+                    top = coords.paddingTop,
+                    right = coords.paddingLeft + coords.chartWidth,
+                    bottom = coords.paddingTop + coords.chartHeight
+                ) {
+                    layout.appIconPlacements.forEach { placement ->
+                        val icon = appIcons[placement.packageName] ?: return@forEach
+                        translate(left = placement.topLeft.x, top = placement.topLeft.y) {
+                            clipPath(appIconClipPath) {
+                                drawImage(
+                                    image = icon,
+                                    topLeft = Offset.Zero,
+                                    alpha = APP_ICON_ALPHA
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Column(modifier = modifier) {
         SelectedPointInfo(
@@ -545,7 +858,7 @@ fun PowerCapacityChart(
             powerCurveMode = curveVisibility.powerCurveMode,
             isFullscreen = isFullscreen,
             onToggleFullscreen = onToggleFullscreen,
-            startPadding = powerAxisStartDp
+            startPadding = selectedPointInfoPadding
         )
 
         Spacer(modifier = Modifier.height(13.dp))
@@ -554,113 +867,108 @@ fun PowerCapacityChart(
             modifier = Modifier
                 .fillMaxWidth()
         ) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(chartHeight)
-                    .onSizeChanged { canvasSizeState.value = it }
-                    // 双指拖动只在全屏模式有意义，用来平移视口，而不是修改数据本身。
-                    .pointerInput(
-                        renderFilteredPoints,
-                        paddingRightDp,
-                        viewportStart,
-                        viewportEnd,
-                        onViewportShift
-                    ) {
-                        if (onViewportShift == null) return@pointerInput
-                        val paddingLeft = 32.dp.toPx()
-                        val chartWidth = size.width - paddingLeft - paddingRightDp.toPx()
-                        if (chartWidth <= 0f) return@pointerInput
-                        awaitEachGesture {
-                            var lastCentroidX: Float? = null
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val activeChanges = event.changes.filter { it.pressed }
-                                if (activeChanges.isEmpty()) break
-                                if (activeChanges.size < 2) {
-                                    lastCentroidX = null
-                                    continue
-                                }
-                                val centroidX =
-                                    activeChanges.map { it.position.x }.average().toFloat()
-                                val previousCentroidX = lastCentroidX
-                                if (previousCentroidX != null) {
-                                    val deltaX = centroidX - previousCentroidX
-                                    val deltaMs =
-                                        ((-deltaX / chartWidth) * viewportDurationMs).toLong()
-                                    if (deltaMs != 0L) {
-                                        onViewportShift(deltaMs)
+            if (isStaticFullscreen) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(chartHeight)
+                        .onSizeChanged { canvasSizeState.value = it }
+                        // 双指拖动只在全屏模式有意义，用来平移视口，而不是修改数据本身。
+                        .pointerInput(
+                            renderFilteredPoints,
+                            paddingRightDp,
+                            viewportStart,
+                            viewportEnd,
+                            onViewportShift
+                        ) {
+                            if (onViewportShift == null) return@pointerInput
+                            val paddingLeft = 32.dp.toPx()
+                            val chartWidth = size.width - paddingLeft - paddingRightDp.toPx()
+                            if (chartWidth <= 0f) return@pointerInput
+                            awaitEachGesture {
+                                var lastCentroidX: Float? = null
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val activeChanges = event.changes.filter { it.pressed }
+                                    if (activeChanges.isEmpty()) break
+                                    if (activeChanges.size < 2) {
+                                        lastCentroidX = null
+                                        continue
                                     }
-                                    event.changes.forEach { it.consume() }
+                                    val centroidX =
+                                        activeChanges.map { it.position.x }.average().toFloat()
+                                    val previousCentroidX = lastCentroidX
+                                    if (previousCentroidX != null) {
+                                        val deltaX = centroidX - previousCentroidX
+                                        val deltaMs =
+                                            ((-deltaX / chartWidth) * viewportDurationMs).toLong()
+                                        if (deltaMs != 0L) {
+                                            onViewportShift(deltaMs)
+                                        }
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                    lastCentroidX = centroidX
                                 }
-                                lastCentroidX = centroidX
                             }
                         }
-                    }
-                    // 单击选择最近点，显示当前时刻的功率/电量/温度摘要。
-                    .pointerInput(
-                        selectablePoints,
-                        paddingRightDp,
-                        viewportStart,
-                        viewportEnd,
-                        isStaticFullscreen,
-                        fullscreenContentWidthPx,
-                        fullscreenContentOffsetPx
-                    ) {
-                        val paddingLeft = 32.dp.toPx()
-                        val chartWidth = size.width - paddingLeft - paddingRightDp.toPx()
-                        val coords = ChartCoordinates(
-                            paddingLeft,
-                            0f,
-                            chartWidth,
-                            0f,
-                            if (isStaticFullscreen) fullMinTime else viewportStart,
-                            if (isStaticFullscreen) fullMaxTime else viewportEnd,
-                            0.0,
-                            0.0,
-                            0.0,
-                            0.0,
-                            contentWidth = if (isStaticFullscreen) fullscreenContentWidthPx else chartWidth,
-                            contentOffsetPx = if (isStaticFullscreen) fullscreenContentOffsetPx else 0f
-                        )
-                        detectTapGestures { offset ->
-                            selectedPointState.value =
-                                coords.findPointAtX(offset.x, selectablePoints)
+                        // 单击选择最近点，显示当前时刻的功率/电量/温度摘要。
+                        .pointerInput(
+                            selectablePoints,
+                            paddingRightDp,
+                            fullscreenContentWidthPx,
+                            fullscreenContentOffsetPx
+                        ) {
+                            val paddingLeft = 32.dp.toPx()
+                            val chartWidth = size.width - paddingLeft - paddingRightDp.toPx()
+                            val coords = ChartCoordinates(
+                                paddingLeft = paddingLeft,
+                                paddingTop = 0f,
+                                chartWidth = chartWidth,
+                                chartHeight = 0f,
+                                minTime = fullMinTime,
+                                maxTime = fullMaxTime,
+                                minPower = 0.0,
+                                maxPower = 0.0,
+                                minTemp = 0.0,
+                                maxTemp = 0.0,
+                                contentWidth = fullscreenContentWidthPx,
+                                contentOffsetPx = fullscreenContentOffsetPx
+                            )
+                            detectTapGestures { offset ->
+                                selectedPointState.value =
+                                    coords.findPointAtX(offset.x, selectablePoints)
+                            }
                         }
-                    }
-                    // 拖动选择与点击选择共用同一套“最近点”逻辑，保持交互反馈一致。
-                    .pointerInput(
-                        selectablePoints,
-                        paddingRightDp,
-                        viewportStart,
-                        viewportEnd,
-                        isStaticFullscreen,
-                        fullscreenContentWidthPx,
-                        fullscreenContentOffsetPx
-                    ) {
-                        val paddingLeft = 32.dp.toPx()
-                        val chartWidth = size.width - paddingLeft - paddingRightDp.toPx()
-                        val coords = ChartCoordinates(
-                            paddingLeft,
-                            0f,
-                            chartWidth,
-                            0f,
-                            if (isStaticFullscreen) fullMinTime else viewportStart,
-                            if (isStaticFullscreen) fullMaxTime else viewportEnd,
-                            0.0,
-                            0.0,
-                            0.0,
-                            0.0,
-                            contentWidth = if (isStaticFullscreen) fullscreenContentWidthPx else chartWidth,
-                            contentOffsetPx = if (isStaticFullscreen) fullscreenContentOffsetPx else 0f
-                        )
-                        detectDragGestures { change, _ ->
-                            change.consume()
-                            selectedPointState.value =
-                                coords.findPointAtX(change.position.x, selectablePoints)
+                        // 拖动选择与点击选择共用同一套“最近点”逻辑，保持交互反馈一致。
+                        .pointerInput(
+                            selectablePoints,
+                            paddingRightDp,
+                            fullscreenContentWidthPx,
+                            fullscreenContentOffsetPx
+                        ) {
+                            val paddingLeft = 32.dp.toPx()
+                            val chartWidth = size.width - paddingLeft - paddingRightDp.toPx()
+                            val coords = ChartCoordinates(
+                                paddingLeft = paddingLeft,
+                                paddingTop = 0f,
+                                chartWidth = chartWidth,
+                                chartHeight = 0f,
+                                minTime = fullMinTime,
+                                maxTime = fullMaxTime,
+                                minPower = 0.0,
+                                maxPower = 0.0,
+                                minTemp = 0.0,
+                                maxTemp = 0.0,
+                                contentWidth = fullscreenContentWidthPx,
+                                contentOffsetPx = fullscreenContentOffsetPx
+                            )
+                            detectDragGestures { change, _ ->
+                                change.consume()
+                                selectedPointState.value =
+                                    coords.findPointAtX(change.position.x, selectablePoints)
+                            }
                         }
-                    }
-            ) {
+                ) {
                 val paddingLeft = 32.dp.toPx()
                 val paddingRight = paddingRightDp.toPx()
                 val paddingTop = 6.dp.toPx()
@@ -701,13 +1009,6 @@ fun PowerCapacityChart(
                     )
                 }
 
-                // 绘图值与展示值是分离的：
-                // - 绘图值在负轴模式下会翻正，只用于映射坐标
-                // - 展示值保持原始语义，由 SelectedPointInfo 单独决定如何格式化
-                val powerValueSelector: (RecordDetailChartPoint) -> Double = { point ->
-                    selectPowerValueForChart(point, curveVisibility.powerCurveMode, isNegativeMode)
-                        .coerceIn(minPower, maxPower)
-                }
                 val powerPath = if (isStaticFullscreen) {
                     fullscreenStaticLayout?.powerPath
                 } else if (hasVisiblePowerCurve) {
@@ -959,11 +1260,11 @@ fun PowerCapacityChart(
                         }
                 }
 
-                if (showAppIcons) {
-                    clipRect(
-                        left = paddingLeft,
-                        top = paddingTop,
-                        right = paddingLeft + chartWidth,
+                 if (showAppIcons) {
+                     clipRect(
+                         left = paddingLeft,
+                         top = paddingTop,
+                         right = paddingLeft + chartWidth,
                         bottom = paddingTop + chartHeight
                     ) {
                         translate(left = if (isStaticFullscreen) -fullscreenContentOffsetPx else 0f) {
@@ -978,8 +1279,99 @@ fun PowerCapacityChart(
                                         )
                                     }
                                 }
+                             }
+                         }
+                     }
+                 }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(chartHeight)
+                        .onSizeChanged { canvasSizeState.value = it }
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            },
+                        onDraw = normalStaticLayerDrawBlock
+                    )
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(
+                                selectablePoints,
+                                paddingRightDp,
+                                viewportStart,
+                                viewportEnd
+                            ) {
+                                val paddingLeft = 32.dp.toPx()
+                                val chartWidth = size.width - paddingLeft - paddingRightDp.toPx()
+                                val coords = ChartCoordinates(
+                                    paddingLeft,
+                                    0f,
+                                    chartWidth,
+                                    0f,
+                                    viewportStart,
+                                    viewportEnd,
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                    contentWidth = chartWidth,
+                                    contentOffsetPx = 0f
+                                )
+                                detectTapGestures { offset ->
+                                    selectedPointState.value =
+                                        coords.findPointAtX(offset.x, selectablePoints)
+                                }
                             }
-                        }
+                            .pointerInput(
+                                selectablePoints,
+                                paddingRightDp,
+                                viewportStart,
+                                viewportEnd
+                            ) {
+                                val paddingLeft = 32.dp.toPx()
+                                val chartWidth = size.width - paddingLeft - paddingRightDp.toPx()
+                                val coords = ChartCoordinates(
+                                    paddingLeft,
+                                    0f,
+                                    chartWidth,
+                                    0f,
+                                    viewportStart,
+                                    viewportEnd,
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                    contentWidth = chartWidth,
+                                    contentOffsetPx = 0f
+                                )
+                                detectDragGestures { change, _ ->
+                                    change.consume()
+                                    selectedPointState.value =
+                                        coords.findPointAtX(change.position.x, selectablePoints)
+                                }
+                            }
+                    ) {
+                        val layout = normalStaticLayout ?: return@Canvas
+                        drawSelectedPointOverlay(
+                            selectedPoint = selectedPointState.value,
+                            coords = layout.coords,
+                            viewportStart = viewportStart,
+                            viewportEnd = viewportEnd,
+                            gridColor = gridColor,
+                            powerColor = powerColor,
+                            capacityColor = capacityColor,
+                            tempColor = tempColor,
+                            curveVisibility = curveVisibility,
+                            hasVisiblePowerCurve = hasVisiblePowerCurve,
+                            powerValueSelector = powerValueSelector
+                        )
                     }
                 }
             }
@@ -1056,7 +1448,7 @@ private fun SelectedPointInfo(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = startPadding),
+            .padding(horizontal = startPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -1451,6 +1843,8 @@ private fun DrawScope.drawFixedPowerAxisLabels(
     val maxW = coords.maxPower.roundToInt()
     val minor = minorStepW.coerceAtLeast(1)
     val major = majorStepW.coerceAtLeast(minor)
+    val topBaseline = coords.paddingTop - textPaint.fontMetrics.ascent
+    val bottomBaseline = coords.paddingTop + coords.chartHeight - textPaint.fontMetrics.descent
 
     // 仅绘制主刻度标签
     var value = minW
@@ -1463,10 +1857,11 @@ private fun DrawScope.drawFixedPowerAxisLabels(
                 (value * labelSignMultiplier).toDouble()
             )
             val powerWidth = textPaint.measureText(powerText)
+            val baselineY = (y - 4.dp.toPx()).coerceIn(topBaseline, bottomBaseline)
             drawContext.canvas.nativeCanvas.drawText(
                 powerText,
                 coords.paddingLeft - powerWidth - 8.dp.toPx(),
-                y - 4.dp.toPx(),
+                baselineY,
                 textPaint
             )
         }
@@ -1503,6 +1898,333 @@ private fun DrawScope.drawTimeAxisLabels(
             coords.paddingTop + coords.chartHeight + 24.dp.toPx(),
             textPaint
         )
+    }
+}
+
+/**
+ * 为普通模式静态层预构建峰值线与标签位置。
+ *
+ * @param peakDisplay 峰值文本与峰值高度
+ * @param coords 图表坐标系
+ * @param canvasWidthPx 当前 Canvas 总宽度
+ * @return 峰值注解布局；当宽度非法时返回 null
+ */
+private fun buildPeakAnnotationLayout(
+    peakDisplay: PeakPowerDisplay,
+    coords: ChartCoordinates,
+    canvasWidthPx: Float,
+    density: Density,
+): PeakAnnotationLayout? {
+    if (canvasWidthPx <= 0f || coords.chartWidth <= 0f) return null
+    val peakY = coords.powerToY(peakDisplay.peakPlotPowerW)
+    val labelPaint = createTextPaint(0, 24f)
+    val labelWidth = labelPaint.measureText(peakDisplay.label)
+    val plotRight = coords.paddingLeft + coords.chartWidth
+    val labelX = with(density) {
+        (plotRight + 4.dp.toPx())
+            .coerceAtMost(canvasWidthPx - labelWidth - 4.dp.toPx())
+            .coerceAtLeast(plotRight + 2.dp.toPx())
+    }
+    val labelY = with(density) {
+        (peakY - 4.dp.toPx()).coerceIn(
+            coords.paddingTop + 12.dp.toPx(),
+            coords.paddingTop + coords.chartHeight - 4.dp.toPx()
+        )
+    }
+    return PeakAnnotationLayout(
+        peakY = peakY,
+        label = peakDisplay.label,
+        labelX = labelX,
+        labelBaselineY = labelY
+    )
+}
+
+/**
+ * 预构建容量标记点的几何布局，避免普通模式滚动时重复计算标签位置。
+ *
+ * @param markers 电量标记点集合
+ * @param coords 图表坐标系
+ * @return 预计算后的标记布局
+ */
+private fun buildCapacityMarkerLayouts(
+    markers: List<CapacityMarker>,
+    coords: ChartCoordinates,
+    density: Density,
+): List<TextPointMarkerLayout> {
+    if (markers.isEmpty()) return emptyList()
+    val textPaint = createTextPaint(0, 20f)
+    val padding = with(density) { 6.dp.toPx() }
+    val textHeight = -textPaint.fontMetrics.ascent
+    val chartRight = coords.paddingLeft + coords.chartWidth
+    val scaledChartHeight = coords.chartHeight * 0.9f
+    val chartBottom = coords.paddingTop + scaledChartHeight
+
+    return markers.map { marker ->
+        val x = coords.timeToX(marker.timestamp)
+        val y = coords.capacityToY(marker.capacity.toDouble())
+        val labelWidth = textPaint.measureText(marker.label)
+        var textX = x + padding
+        if (textX + labelWidth > chartRight) textX = x - padding - labelWidth
+        if (textX < coords.paddingLeft) textX = coords.paddingLeft
+
+        var textY = y - padding
+        if (textY - textHeight < coords.paddingTop) textY = y + textHeight + padding
+        if (textY > chartBottom) textY = chartBottom
+
+        TextPointMarkerLayout(
+            center = Offset(x, y),
+            label = marker.label,
+            labelX = textX,
+            labelBaselineY = textY
+        )
+    }
+}
+
+/**
+ * 预构建温度极值标记的几何布局。
+ *
+ * @param points 当前图表点集合
+ * @param coords 图表坐标系
+ * @return 最高温/最低温标记布局；无有效温度时返回空集合
+ */
+private fun buildTempMarkerLayouts(
+    points: List<RecordDetailChartPoint>,
+    coords: ChartCoordinates,
+    density: Density,
+): List<TextPointMarkerLayout> {
+    val validPoints = points.filter { it.temp > 0 }
+    if (validPoints.size < 2) return emptyList()
+    val maxPoint = validPoints.maxByOrNull { it.temp } ?: return emptyList()
+    val minPoint = validPoints.minByOrNull { it.temp } ?: return emptyList()
+    if (maxPoint.temp == minPoint.temp) return emptyList()
+
+    val textPaint = createTextPaint(0, 20f)
+    val padding = with(density) { 6.dp.toPx() }
+    val chartRight = coords.paddingLeft + coords.chartWidth
+
+    return listOf(maxPoint, minPoint).map { point ->
+        val x = coords.timeToX(point.timestamp)
+        val y = coords.tempToY(point.temp.toDouble())
+        val label = String.format(Locale.getDefault(), "%.1f ℃", point.temp / 10.0)
+        val labelWidth = textPaint.measureText(label)
+        var textX = x + padding
+        if (textX + labelWidth > chartRight) textX = x - padding - labelWidth
+        if (textX < coords.paddingLeft) textX = coords.paddingLeft
+
+        val isMax = point === maxPoint
+        val textY = if (isMax) {
+            y - padding
+        } else {
+            y - textPaint.fontMetrics.ascent + padding
+        }
+
+        TextPointMarkerLayout(
+            center = Offset(x, y),
+            label = label,
+            labelX = textX,
+            labelBaselineY = textY
+        )
+    }
+}
+
+/**
+ * 预构建屏幕状态线 Path，供普通模式静态层直接复用。
+ *
+ * @param points 原始时间序列点
+ * @param coords 图表坐标系
+ * @return 亮屏/息屏 Path；无数据时返回 null
+ */
+private fun buildScreenStatePaths(
+    points: List<RecordDetailChartPoint>,
+    coords: ChartCoordinates,
+    density: Density,
+): ScreenStatePaths? {
+    if (points.isEmpty()) return null
+    val y = coords.paddingTop + coords.chartHeight + with(density) { 8.dp.toPx() }
+    val screenOnPath = Path()
+    val screenOffPath = Path()
+    var hasOnSegment = false
+    var hasOffSegment = false
+
+    if (points.size == 1) {
+        val targetPath = if (points[0].isDisplayOn) screenOnPath else screenOffPath
+        targetPath.moveTo(coords.paddingLeft, y)
+        targetPath.lineTo(coords.paddingLeft + coords.chartWidth, y)
+        if (points[0].isDisplayOn) {
+            hasOnSegment = true
+        } else {
+            hasOffSegment = true
+        }
+        return ScreenStatePaths(
+            screenOnPath = screenOnPath.takeIf { hasOnSegment },
+            screenOffPath = screenOffPath.takeIf { hasOffSegment }
+        )
+    }
+
+    var lastOnX = Float.NaN
+    var lastOffX = Float.NaN
+    for (index in 0 until points.lastIndex) {
+        val current = points[index]
+        val next = points[index + 1]
+        val startX = coords.timeToX(current.timestamp)
+        val endX = coords.timeToX(next.timestamp)
+        if (current.isDisplayOn) {
+            if (startX != lastOnX) screenOnPath.moveTo(startX, y)
+            screenOnPath.lineTo(endX, y)
+            lastOnX = endX
+            hasOnSegment = true
+        } else {
+            if (startX != lastOffX) screenOffPath.moveTo(startX, y)
+            screenOffPath.lineTo(endX, y)
+            lastOffX = endX
+            hasOffSegment = true
+        }
+    }
+
+    return ScreenStatePaths(
+        screenOnPath = screenOnPath.takeIf { hasOnSegment },
+        screenOffPath = screenOffPath.takeIf { hasOffSegment }
+    )
+}
+
+/**
+ * 绘制预计算后的点标记与文本。
+ *
+ * @param layouts 预计算布局
+ * @param color 标记颜色
+ */
+private fun DrawScope.drawTextPointMarkerLayouts(
+    layouts: List<TextPointMarkerLayout>,
+    color: Color
+) {
+    if (layouts.isEmpty()) return
+    val textPaint = createTextPaint(color.toArgb(), 20f)
+    layouts.forEach { layout ->
+        drawCircle(color, radius = 3.dp.toPx() * 0.65f, center = layout.center)
+        drawContext.canvas.nativeCanvas.drawText(
+            layout.label,
+            layout.labelX,
+            layout.labelBaselineY,
+            textPaint
+        )
+    }
+}
+
+/**
+ * 绘制预计算后的峰值线与标签。
+ *
+ * @param layout 峰值布局
+ * @param coords 图表坐标系
+ * @param color 峰值颜色
+ */
+private fun DrawScope.drawPeakAnnotation(
+    layout: PeakAnnotationLayout,
+    coords: ChartCoordinates,
+    color: Color
+) {
+    drawLine(
+        color = color.copy(alpha = 0.9f),
+        start = Offset(coords.paddingLeft, layout.peakY),
+        end = Offset(coords.paddingLeft + coords.chartWidth, layout.peakY),
+        strokeWidth = 1.dp.toPx()
+    )
+    val textPaint = createTextPaint(color.toArgb(), 24f)
+    drawContext.canvas.nativeCanvas.drawText(
+        layout.label,
+        layout.labelX,
+        layout.labelBaselineY,
+        textPaint
+    )
+}
+
+/**
+ * 绘制预构建的屏幕状态线 Path。
+ *
+ * @param paths 亮屏/息屏 Path
+ * @param screenOnColor 亮屏颜色
+ * @param screenOffColor 息屏颜色
+ * @param strokeWidth 线宽
+ */
+private fun DrawScope.drawScreenStatePaths(
+    paths: ScreenStatePaths,
+    screenOnColor: Color,
+    screenOffColor: Color,
+    strokeWidth: Dp
+) {
+    val stroke = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Butt)
+    paths.screenOnPath?.let { drawPath(it, screenOnColor, style = stroke) }
+    paths.screenOffPath?.let { drawPath(it, screenOffColor, style = stroke) }
+}
+
+/**
+ * 绘制选中点覆盖层。
+ *
+ * @param selectedPoint 当前选中的点
+ * @param coords 图表坐标系
+ * @param viewportStart 视口起点
+ * @param viewportEnd 视口终点
+ * @param gridColor 参考线颜色
+ * @param powerColor 功率点颜色
+ * @param capacityColor 电量点颜色
+ * @param tempColor 温度点颜色
+ * @param curveVisibility 曲线显隐配置
+ * @param hasVisiblePowerCurve 当前是否展示功率曲线
+ * @param powerValueSelector 功率取值函数
+ */
+private fun DrawScope.drawSelectedPointOverlay(
+    selectedPoint: RecordDetailChartPoint?,
+    coords: ChartCoordinates,
+    viewportStart: Long,
+    viewportEnd: Long,
+    gridColor: Color,
+    powerColor: Color,
+    capacityColor: Color,
+    tempColor: Color,
+    curveVisibility: RecordChartCurveVisibility,
+    hasVisiblePowerCurve: Boolean,
+    powerValueSelector: (RecordDetailChartPoint) -> Double
+) {
+    clipRect(
+        left = coords.paddingLeft,
+        top = coords.paddingTop,
+        right = coords.paddingLeft + coords.chartWidth,
+        bottom = coords.paddingTop + coords.chartHeight
+    ) {
+        selectedPoint
+            ?.takeIf { it.timestamp in viewportStart..viewportEnd }
+            ?.let { point ->
+                val selectedX = coords.timeToX(point.timestamp)
+                drawLine(
+                    color = gridColor.copy(alpha = 0.6f),
+                    start = Offset(selectedX, coords.paddingTop),
+                    end = Offset(selectedX, coords.paddingTop + coords.chartHeight),
+                    strokeWidth = 1.dp.toPx()
+                )
+                if (hasVisiblePowerCurve) {
+                    val powerY = coords.powerToY(powerValueSelector(point))
+                    drawCircle(
+                        powerColor,
+                        radius = 2.8.dp.toPx(),
+                        center = Offset(selectedX, powerY)
+                    )
+                }
+                if (curveVisibility.showCapacity) {
+                    val capacityY = coords.capacityToY(point.capacity.toDouble())
+                    drawCircle(
+                        capacityColor,
+                        radius = 2.8.dp.toPx(),
+                        center = Offset(selectedX, capacityY)
+                    )
+                }
+                if (curveVisibility.showTemp) {
+                    val tempY = coords.tempToY(point.temp.toDouble())
+                    drawCircle(
+                        tempColor,
+                        radius = 2.8.dp.toPx(),
+                        center = Offset(selectedX, tempY)
+                    )
+                }
+            }
     }
 }
 
