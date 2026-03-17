@@ -707,18 +707,18 @@ private fun buildDetailPowerSummaryText(
         power = powerUiState.averagePower,
         dualCellEnabled = dualCellEnabled,
         calibrationValue = calibrationValue
-    )
+    ).replace(" W","")
     val screenOnText = formatDetailPowerValue(
         power = powerUiState.screenOnAveragePower,
         dualCellEnabled = dualCellEnabled,
         calibrationValue = calibrationValue
-    )
+    ).replace(" W","")
     val screenOffText = formatDetailPowerValue(
         power = powerUiState.screenOffAveragePower,
         dualCellEnabled = dualCellEnabled,
         calibrationValue = calibrationValue
-    )
-    return "$averageText / $screenOnText / $screenOffText"
+    ).replace(" W","")
+    return "$averageText / $screenOnText / $screenOffText W"
 }
 
 private fun formatTempText(tempCelsius: Double?): String {
