@@ -40,24 +40,17 @@ private data class CommandItem(
 fun AdbGuideDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val shellCommand = remember {
-        "CLASSPATH=$(pm path yangfentuozi.batteryrecorder | cut -d: -f2) app_process /system/bin yangfentuozi.batteryrecorder.server.Main"
+        "CLASSPATH=$(pm path yangfentuozi.batteryrecorder | cut -d: -f2) setsid app_process /system/bin yangfentuozi.batteryrecorder.server.Main </dev/null >/dev/null 2>&1 &"
     }
-    val shellNoHupCommand = remember(shellCommand) {
-        "CLASSPATH=$(pm path yangfentuozi.batteryrecorder | cut -d: -f2) nohup app_process /system/bin yangfentuozi.batteryrecorder.server.Main >/dev/null 2>&1 &"
-    }
-    val commandItems = remember(shellCommand, shellNoHupCommand) {
+    val commandItems = remember(shellCommand) {
         listOf(
             CommandItem(
                 title = "ADB 场景：电脑端已连接设备，直接执行",
                 command = "adb shell \"$shellCommand\""
             ),
             CommandItem(
-                title = "纯 Shell 场景：已进入设备 shell 环境",
+                title = "纯 Shell 场景：已进入设备 shell 环境（后台启动）",
                 command = shellCommand
-            ),
-            CommandItem(
-                title = "纯 Shell 场景：后台常驻启动（推荐）",
-                command = shellNoHupCommand
             )
         )
     }

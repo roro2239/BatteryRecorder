@@ -13,10 +13,8 @@ object RootServerStarter {
         context: Context,
         source: String
     ): Boolean {
-        val appContext = context.applicationContext
         val command =
-            "nohup app_process \"-Djava.class.path=${appContext.applicationInfo.sourceDir}\" / " +
-                    "yangfentuozi.batteryrecorder.server.Main >/dev/null 2>&1 &"
+            "CLASSPATH=$(pm path yangfentuozi.batteryrecorder | cut -d: -f2) setsid app_process /system/bin yangfentuozi.batteryrecorder.server.Main </dev/null >/dev/null 2>&1 &"
         LoggerX.i<RootServerStarter>("[启动请求] 来源=$source，准备执行 ROOT 启动命令")
         return try {
             Runtime.getRuntime().exec(
