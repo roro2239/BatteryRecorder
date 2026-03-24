@@ -159,30 +159,33 @@ class PowerRecordWriter(
             if (startedNewSegment) {
                 LoggerX.d<BaseDelayedRecordWriter>("write: 新分段已创建, 立即落盘, file=${segmentFile?.name}")
                 writer!!.flushNow()
+                val currentFile = segmentFile
+                if (currentFile != null) {
+                    LoggerX.d<BaseDelayedRecordWriter>(
+                        "write: 当前记录文件已切换, reason=新分段已就绪 file=${currentFile.name}"
+                    )
+                }
                 return WriteResult(
                     accepted = true,
-                    changedRecordsFile = buildChangedRecordsFile("新分段已就绪")
+                    changedRecordsFile = currentFile?.let(RecordsFile::fromFile)
                 )
             }
 
             writer!!.onEnqueued()
             if (justChangedStatus) {
                 writer!!.flushNow()
-                LoggerX.d<BaseDelayedRecordWriter>("write: 当前记录文件已切换, file=${segmentFile?.name}")
+                val currentFile = segmentFile
+                if (currentFile != null) {
+                    LoggerX.d<BaseDelayedRecordWriter>(
+                        "write: 当前记录文件已切换, reason=状态切换后续写当前分段 file=${currentFile.name}"
+                    )
+                }
                 return WriteResult(
                     accepted = true,
-                    changedRecordsFile = buildChangedRecordsFile("状态切换后续写当前分段")
+                    changedRecordsFile = currentFile?.let(RecordsFile::fromFile)
                 )
             }
             return WriteResult(accepted = true)
-        }
-
-        private fun buildChangedRecordsFile(reason: String): RecordsFile? {
-            val currentFile = segmentFile ?: return null
-            LoggerX.d<BaseDelayedRecordWriter>(
-                "buildChangedRecordsFile: reason=$reason file=${currentFile.name}"
-            )
-            return RecordsFile.fromFile(currentFile)
         }
 
         private fun startNewSegmentIfNeed(
