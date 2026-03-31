@@ -1,4 +1,4 @@
-package yangfentuozi.batteryrecorder.ui
+package yangfentuozi.batteryrecorder.utils
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets

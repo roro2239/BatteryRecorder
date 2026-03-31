@@ -22,8 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import yangfentuozi.batteryrecorder.ipc.Service
-import yangfentuozi.batteryrecorder.ui.batteryRecorderScaffoldInsets
-import yangfentuozi.batteryrecorder.ui.bottomWithNavigationBar
 import yangfentuozi.batteryrecorder.ui.components.settings.sections.CalibrationSection
 import yangfentuozi.batteryrecorder.ui.components.settings.sections.LogSection
 import yangfentuozi.batteryrecorder.ui.components.settings.sections.PredictionSection
@@ -36,6 +34,8 @@ import yangfentuozi.batteryrecorder.ui.model.SettingsActions
 import yangfentuozi.batteryrecorder.ui.model.SettingsUiProps
 import yangfentuozi.batteryrecorder.ui.model.SettingsUiState
 import yangfentuozi.batteryrecorder.ui.viewmodel.SettingsViewModel
+import yangfentuozi.batteryrecorder.utils.batteryRecorderScaffoldInsets
+import yangfentuozi.batteryrecorder.utils.bottomWithNavigationBar
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable

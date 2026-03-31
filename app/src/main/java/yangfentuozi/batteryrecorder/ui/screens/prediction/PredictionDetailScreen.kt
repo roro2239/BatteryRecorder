@@ -37,14 +37,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import yangfentuozi.batteryrecorder.ui.batteryRecorderScaffoldInsets
-import yangfentuozi.batteryrecorder.ui.bottomWithNavigationBar
 import yangfentuozi.batteryrecorder.ui.components.global.LazySplicedColumnGroup
 import yangfentuozi.batteryrecorder.ui.theme.AppShape
 import yangfentuozi.batteryrecorder.ui.viewmodel.PredictionDetailUiEntry
 import yangfentuozi.batteryrecorder.ui.viewmodel.PredictionDetailViewModel
 import yangfentuozi.batteryrecorder.ui.viewmodel.SettingsViewModel
 import yangfentuozi.batteryrecorder.utils.AppIconMemoryCache
+import yangfentuozi.batteryrecorder.utils.batteryRecorderScaffoldInsets
+import yangfentuozi.batteryrecorder.utils.bottomWithNavigationBar
 import yangfentuozi.batteryrecorder.utils.formatPower
 import yangfentuozi.batteryrecorder.utils.formatRemainingTime
 

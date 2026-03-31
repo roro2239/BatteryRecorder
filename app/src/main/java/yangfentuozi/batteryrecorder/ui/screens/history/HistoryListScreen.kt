@@ -46,15 +46,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import yangfentuozi.batteryrecorder.shared.data.BatteryStatus
 import yangfentuozi.batteryrecorder.shared.data.RecordsFile
-import yangfentuozi.batteryrecorder.ui.batteryRecorderScaffoldInsets
 import yangfentuozi.batteryrecorder.ui.components.global.SwipeRevealRow
-import yangfentuozi.batteryrecorder.ui.navigationBarBottomPadding
 import yangfentuozi.batteryrecorder.ui.theme.AppShape
 import yangfentuozi.batteryrecorder.ui.viewmodel.HistoryViewModel
 import yangfentuozi.batteryrecorder.ui.viewmodel.SettingsViewModel
+import yangfentuozi.batteryrecorder.utils.batteryRecorderScaffoldInsets
 import yangfentuozi.batteryrecorder.utils.formatDurationHours
 import yangfentuozi.batteryrecorder.utils.formatFullDateTime
 import yangfentuozi.batteryrecorder.utils.formatPower
+import yangfentuozi.batteryrecorder.utils.navigationBarBottomPadding
 
 private const val NEAR_END_PRELOAD_THRESHOLD = 5
 private val CHARGE_CAPACITY_CHANGE_FILTERS = listOf(20, 40, 70)

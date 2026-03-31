@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import yangfentuozi.batteryrecorder.ui.viewmodel.dataclass.PredictionConfidenceLevel
+import yangfentuozi.batteryrecorder.ui.model.PredictionConfidenceLevel
 
 private val PredictionLowColor = Color(0xFFF44336)
 private val PredictionMediumColor = Color(0xFFFF9800)

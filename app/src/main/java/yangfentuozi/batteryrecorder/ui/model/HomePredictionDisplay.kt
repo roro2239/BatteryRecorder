@@ -1,4 +1,4 @@
-package yangfentuozi.batteryrecorder.ui.viewmodel.dataclass
+package yangfentuozi.batteryrecorder.ui.model
 
 /**
  * 首页预测卡片使用的轻量展示数据。

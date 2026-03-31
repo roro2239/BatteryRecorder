@@ -1,4 +1,4 @@
-package yangfentuozi.batteryrecorder.ui.viewmodel.dataclass
+package yangfentuozi.batteryrecorder.ui.model
 
 /**
  * 首页预测卡片展示使用的置信度档位。

@@ -17,7 +17,7 @@ import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.unit.dp
 import yangfentuozi.batteryrecorder.data.history.SceneStats
 import yangfentuozi.batteryrecorder.ui.components.global.StatRow
-import yangfentuozi.batteryrecorder.ui.viewmodel.dataclass.HomePredictionDisplay
+import yangfentuozi.batteryrecorder.ui.model.HomePredictionDisplay
 import yangfentuozi.batteryrecorder.utils.computePowerW
 import yangfentuozi.batteryrecorder.utils.formatFullRemainingTime
 import yangfentuozi.batteryrecorder.utils.formatRemainingTime

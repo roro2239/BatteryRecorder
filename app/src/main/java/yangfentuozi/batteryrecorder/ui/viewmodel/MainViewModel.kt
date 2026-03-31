@@ -31,9 +31,9 @@ import yangfentuozi.batteryrecorder.shared.data.BatteryStatus
 import yangfentuozi.batteryrecorder.shared.data.RecordsFile
 import yangfentuozi.batteryrecorder.shared.util.LoggerX
 import yangfentuozi.batteryrecorder.ui.model.CurrentRecordUiState
+import yangfentuozi.batteryrecorder.ui.model.HomePredictionDisplay
 import yangfentuozi.batteryrecorder.ui.model.LiveRecordSample
-import yangfentuozi.batteryrecorder.ui.viewmodel.dataclass.HomePredictionDisplay
-import yangfentuozi.batteryrecorder.ui.viewmodel.dataclass.PredictionConfidenceLevel
+import yangfentuozi.batteryrecorder.ui.model.PredictionConfidenceLevel
 
 private const val TAG = "MainViewModel"
 
