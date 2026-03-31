@@ -89,7 +89,7 @@ private val TEMP_COLOR = Color(0xFFFF8A65)
 private val SCREEN_ON_COLOR = Color(0xFF2E7D32)
 private val SCREEN_OFF_COLOR = Color(0xFFD32F2F)
 private val LINE_STROKE_WIDTH = 1.3.dp
-private const val APP_ICON_ALPHA = 0.75f
+private const val APP_ICON_ALPHA = 0.55f
 private const val TEMP_EXPAND_STEP_TENTHS = 100.0    // 10℃
 // 横屏全屏下记录详情通常会查看长时间段数据，双指平移稍微提速以减少来回拖动次数。
 private const val FULLSCREEN_TWO_FINGER_PAN_SPEED_MULTIPLIER = 2.0f
