@@ -1,18 +1,21 @@
 package yangfentuozi.batteryrecorder.server.fakecontext
 
 import android.annotation.SuppressLint
+import android.app.IActivityManager
 import android.content.AttributionSource
+import android.content.ContentResolver
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ApplicationInfo
+import android.os.Binder
+import android.os.ServiceManager
 import android.system.Os
-import android.util.Log
 import androidx.annotation.Keep
-import java.lang.reflect.Constructor
+import java.lang.reflect.Method
 
 @Keep
 class FakeContext : ContextWrapper(systemContext) {
-    private val packageContext: Context = systemContext ?: this
+    private val packageContext: Context = systemContext
 
     override fun getPackageName(): String {
         return PACKAGE_NAME
@@ -51,44 +54,41 @@ class FakeContext : ContextWrapper(systemContext) {
         return packageContext
     }
 
+    override fun getContentResolver(): ContentResolver {
+        return externalContentResolver
+    }
+
     @SuppressLint("DiscouragedPrivateApi")
     companion object {
         var PACKAGE_NAME: String = if (Os.getuid() == 0) "root" else "com.android.shell"
 
-        private var ACTIVITY_THREAD_CLASS: Class<*>? = null
-        private var ACTIVITY_THREAD: Any? = null
+        private val providerToken = Binder()
 
-        init {
-            try {
-                ACTIVITY_THREAD_CLASS = Class.forName("android.app.ActivityThread")
-                val activityThreadConstructor: Constructor<*>? =
-                    ACTIVITY_THREAD_CLASS?.getDeclaredConstructor()
-                activityThreadConstructor?.isAccessible = true
-                ACTIVITY_THREAD = activityThreadConstructor?.newInstance()
-
-                val sCurrentActivityThreadField =
-                    ACTIVITY_THREAD_CLASS?.getDeclaredField("sCurrentActivityThread")
-                sCurrentActivityThreadField?.isAccessible = true
-                sCurrentActivityThreadField?.set(null, ACTIVITY_THREAD)
-            } catch (e: Exception) {
-                throw AssertionError(e)
-            }
+        private val activityManager: IActivityManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+            IActivityManager.Stub.asInterface(ServiceManager.getService("activity"))
+                ?: throw IllegalStateException("activity 服务未就绪")
         }
 
-        val systemContext: Context?
-            get() {
-                try {
-                    val getSystemContextMethod =
-                        ACTIVITY_THREAD_CLASS!!.getDeclaredMethod("getSystemContext")
-                    return getSystemContextMethod.invoke(ACTIVITY_THREAD) as Context?
-                } catch (throwable: Throwable) {
-                    Log.e(
-                        "FakeContext",
-                        "Workarounds: Failed to get system context: ${throwable.stackTraceToString()}",
-                        throwable
-                    )
-                    return null
-                }
+        private val activityThreadClass: Class<*> = Class.forName("android.app.ActivityThread")
+        private val currentActivityThreadMethod: Method =
+            activityThreadClass.getDeclaredMethod("currentActivityThread").apply {
+                isAccessible = true
             }
+        private val systemMainMethod: Method =
+            activityThreadClass.getDeclaredMethod("systemMain").apply { isAccessible = true }
+        private val getSystemContextMethod: Method =
+            activityThreadClass.getDeclaredMethod("getSystemContext").apply { isAccessible = true }
+
+        val systemContext: Context by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+            val activityThread = currentActivityThreadMethod.invoke(null)
+                ?: systemMainMethod.invoke(null)
+                ?: throw IllegalStateException("获取 system ActivityThread 失败")
+            getSystemContextMethod.invoke(activityThread) as? Context
+                ?: throw IllegalStateException("获取 systemContext 失败")
+        }
+
+        private val externalContentResolver by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+            ExternalProviderResolver(systemContext, activityManager, providerToken)
+        }
     }
 }
