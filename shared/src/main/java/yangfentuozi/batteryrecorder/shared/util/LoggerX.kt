@@ -19,9 +19,8 @@ object LoggerX {
     @Volatile
     private var writer: LogWriter? = null
 
-    // 只允许传入
     var logDir: File?
-        get() = null
+        get() = writer?.logDir
         set(value) {
             writer?.close()
             writer = if (value == null) null else try {
@@ -32,16 +31,14 @@ object LoggerX {
             }
         }
 
-    // 只允许传入
     var logDirPath: String?
-        get() = null
+        get() = writer?.logDir?.path
         set(value) {
             logDir = if (value == null) null else File(value)
         }
 
-    // 只允许传入
     var suffix: String?
-        get() = null
+        get() = writer?.suffix
         set(value) {
             writer?.setSuffix(value ?: "")
         }
@@ -165,9 +162,10 @@ object LoggerX {
         }
     }
 
-    private class LogWriter(private val logDir: File) {
+    private class LogWriter(val logDir: File) {
 
-        private var suffix = ""
+        var suffix = ""
+            private set
         private var fileNameRegex = Regex("""^(\d{4}-\d{2}-\d{2})(?:_(\d+))?\.log$""")
         private val dateFileFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         private val lineTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
