@@ -35,7 +35,7 @@
 - [x] 额外电压记录
 - [x] 电池温度信息 `/sys/class/power_supply/battery/temp` 记录
 - [ ] 亮屏判断改为以屏幕亮度为准
-- ~~[ ] 日志导出~~
+- [ ] 日志导出
 - [ ] 优化 needDeleteSegment 判断
 
 ### ext
@@ -52,3 +52,7 @@
 
 - [QQ 群](https://qm.qq.com/q/6q5etoYAuc)
 - [GitHub Issues](https://github.com/Itosang/BatteryRecorder/issues) (推荐)
+
+## 鸣谢
+
+- [RikkaW/HiddenApi](https://github.com/RikkaW/HiddenApi)
