@@ -252,6 +252,10 @@ class Server internal constructor() : IService.Stub() {
 
         Handlers.initMainThread()
         Runtime.getRuntime().addShutdownHook(Thread { this.stopServiceImmediately() })
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            LoggerX.a(thread.name, "Server crashed", tr = throwable)
+            LoggerX.writer?.close()
+        }
         ServiceManagerCompat.waitService("activity_task")
         ServiceManagerCompat.waitService("display")
         ServiceManagerCompat.waitService("power")

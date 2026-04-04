@@ -17,7 +17,8 @@ import java.util.Locale
 object LoggerX {
 
     @Volatile
-    private var writer: LogWriter? = null
+    var writer: LogWriter? = null
+        private set
 
     var logDir: File?
         get() = writer?.logDir
@@ -162,7 +163,7 @@ object LoggerX {
         }
     }
 
-    private class LogWriter(val logDir: File) {
+    class LogWriter(val logDir: File) {
 
         var suffix = ""
             private set

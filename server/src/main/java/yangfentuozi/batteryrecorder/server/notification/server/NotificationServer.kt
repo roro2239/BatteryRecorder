@@ -104,6 +104,10 @@ class NotificationServer(
         serverSocket = LocalServerSocket(SOCKET_NAME)
 
         Runtime.getRuntime().addShutdownHook(Thread { this.stopServiceImmediately() })
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            LoggerX.a(thread.name, "NotificationServer crashed", tr = throwable)
+            LoggerX.writer?.close()
+        }
 
         startServer()
         Looper.loop()
