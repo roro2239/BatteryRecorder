@@ -331,6 +331,7 @@ class Server internal constructor() : IService.Stub() {
         }
         serverSettings?.let(::updateConfig) ?: LoggerX.w(TAG, "init: 未读取到配置, 使用当前默认值")
 
+        monitor.enableNotification()
         monitor.start()
         LoggerX.i(TAG, "init: Monitor 已启动, 进入消息循环")
 

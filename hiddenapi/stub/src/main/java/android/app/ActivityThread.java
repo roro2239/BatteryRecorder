@@ -15,4 +15,8 @@ public class ActivityThread {
     public ContextImpl getSystemUiContext() {
         throw new UnsupportedOperationException("STUB");
     }
+
+    public static ActivityThread currentActivityThread() {
+        throw new UnsupportedOperationException("STUB");
+    }
 }

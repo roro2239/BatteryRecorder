@@ -12,7 +12,11 @@ import android.os.IPowerManager
 import android.os.RemoteCallbackList
 import android.os.RemoteException
 import android.os.ServiceManager
+import android.system.Os
 import androidx.annotation.Keep
+import yangfentuozi.batteryrecorder.server.notification.LocalNotificationUtil
+import yangfentuozi.batteryrecorder.server.notification.NotificationUtil
+import yangfentuozi.batteryrecorder.server.notification.RemoteNotificationUtil
 import yangfentuozi.batteryrecorder.server.sampler.Sampler
 import yangfentuozi.batteryrecorder.server.writer.PowerRecordWriter
 import yangfentuozi.batteryrecorder.shared.Constants
@@ -20,6 +24,7 @@ import yangfentuozi.batteryrecorder.shared.config.SettingsConstants
 import yangfentuozi.batteryrecorder.shared.data.LineRecord
 import yangfentuozi.batteryrecorder.shared.util.Handlers
 import yangfentuozi.batteryrecorder.shared.util.LoggerX
+import yangfentuozi.hiddenapi.compat.ServiceManagerCompat
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
@@ -62,6 +67,9 @@ class Monitor(
 
     @Volatile
     var screenOffRecord: Boolean = SettingsConstants.screenOffRecordEnabled.def
+
+    @Volatile
+    var notificationUtil: NotificationUtil? = null
 
     private var mAlwaysPollingScreenStatusEnabled: Boolean =
         SettingsConstants.alwaysPollingScreenStatusEnabled.def
@@ -108,19 +116,19 @@ class Monitor(
                         }
                         isInteractive = latestIsInteractive
                     }
-                    val writeResult = writer.write(
-                        LineRecord(
-                            timestamp,
-                            power,
-                            currForegroundApp,
-                            sample.capacity,
-                            if (isInteractive) 1 else 0,
-                            sample.status,
-                            sample.temp,
-                            sample.voltage,
-                            sample.current
-                        )
+                    val record = LineRecord(
+                        timestamp,
+                        power,
+                        currForegroundApp,
+                        sample.capacity,
+                        if (isInteractive) 1 else 0,
+                        sample.status,
+                        sample.temp,
+                        sample.voltage,
+                        sample.current
                     )
+                    val writeResult = writer.write(record)
+                    notificationUtil?.updateNotification(record)
 
                     callbackHandler.post {
                         // 回调 app：先同步当前记录文件切换，再下发已进入当前记录的实时样本。
@@ -248,6 +256,7 @@ class Monitor(
         } catch (e: RemoteException) {
             LoggerX.e(TAG, "stop: 注销任务栈监听失败", tr = e)
         }
+        disableNotification()
     }
 
     fun notifyLock() {
@@ -277,5 +286,23 @@ class Monitor(
             LoggerX.d(TAG, "onFocusedAppChanged: 应用切换, $currForegroundApp -> $packageName")
         }
         currForegroundApp = packageName
+    }
+
+    // 耗时操作
+    fun enableNotification() {
+        lock.withLock {
+            notificationUtil?.close()
+            notificationUtil = if (Os.getuid() == 0) RemoteNotificationUtil()
+            else {
+                ServiceManagerCompat.waitService("notification")
+                LocalNotificationUtil()
+            }
+        }
+    }
+
+    fun disableNotification() {
+        lock.withLock {
+            notificationUtil?.close()
+        }
     }
 }

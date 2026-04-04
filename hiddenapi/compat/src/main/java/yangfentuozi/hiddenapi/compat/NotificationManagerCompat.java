@@ -26,7 +26,7 @@ public class NotificationManagerCompat {
 
         ParceledListSlice<NotificationChannel> slice =
                 new ParceledListSlice<>(java.util.Collections.singletonList(channel));
-        nm.createNotificationChannelsForPackage(pkg, uid, false, slice);
+        nm.createNotificationChannelsForPackage(pkg, uid, slice);
     }
 
     public static void enqueueNotification(
@@ -40,5 +40,17 @@ public class NotificationManagerCompat {
         init();
 
         nm.enqueueNotificationWithTag(pkg, pkg, tag, id, notification, userId);
+    }
+
+    public static void cancelNotification(
+            INotificationManager nm,
+            String pkg,
+            String tag,
+            int id,
+            int userId
+    ) throws RemoteException {
+        init();
+
+        nm.cancelNotificationWithTag(pkg, pkg, tag, id, userId);
     }
 }

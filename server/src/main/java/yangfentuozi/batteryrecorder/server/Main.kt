@@ -2,6 +2,7 @@ package yangfentuozi.batteryrecorder.server
 
 import android.ddm.DdmHandleAppName
 import androidx.annotation.Keep
+import yangfentuozi.batteryrecorder.server.notification.server.NotificationServer
 import yangfentuozi.batteryrecorder.shared.Constants
 import yangfentuozi.batteryrecorder.shared.util.LoggerX
 import java.io.File
@@ -15,26 +16,24 @@ object Main {
     @Keep
     @JvmStatic
     fun main(args: Array<String>) {
-        LoggerX.i(TAG, "main: 准备初始化 Server")
-        DdmHandleAppName.setAppName("battery_recorder", 0)
+        val isNotificationServer = args.size > 1 && args[0] == "--notificationServer"
+        DdmHandleAppName.setAppName("batteryrecorder_server", 0)
+
+        // 配置 LoggerX
+        LoggerX.logDirPath = "${Constants.SHELL_DATA_DIR_PATH}/${Constants.SHELL_LOG_DIR_PATH}"
+        if (isNotificationServer) LoggerX.suffix = "-notificationServer"
+        LoggerX.d(TAG, "main: LoggerX 配置完成, dir=${LoggerX.logDirPath}, suffix=${LoggerX.suffix}")
+
         // 设置OOM保活
         setSelfOomScoreAdj()
-        /* ColorOS 调度使得某些 Soc 的 1 核在息屏后被禁用，会导致某些机型息屏后无法正常记录，故不自行 taskset，全权交由系统调度
-        try {
-            Runtime.getRuntime().exec(new String[]{"taskset", "-ap", "1", String.valueOf(Os.getpid())});
-        } catch (IOException e) {
-            Log.e("Main", "Failed to set task affinity", e);
-            throw new RuntimeException(e);
-        }
-        */
-        // 指定日志文件夹
-        LoggerX.logDirPath = "${Constants.SHELL_DATA_DIR_PATH}/${Constants.SHELL_LOG_DIR_PATH}"
-        LoggerX.d(TAG, 
-            "main: 日志目录初始化完成, dir=${Constants.SHELL_DATA_DIR_PATH}/${Constants.SHELL_LOG_DIR_PATH}"
-        )
-        LoggerX.d(TAG, "main: 即将进入 Server 初始化")
 
-        Server()
+        if (isNotificationServer) {
+            LoggerX.i(TAG, "main: 初始化 NotificationServer")
+            NotificationServer(parentServerPID = args[1].toInt())
+        } else {
+            LoggerX.i(TAG, "main: 初始化 Server")
+            Server()
+        }
     }
 
     private fun setSelfOomScoreAdj() {

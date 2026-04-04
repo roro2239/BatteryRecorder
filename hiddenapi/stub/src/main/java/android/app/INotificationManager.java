@@ -11,8 +11,7 @@ public interface INotificationManager extends IInterface {
     void createNotificationChannelsForPackage(
             String pkg,
             int uid,
-            boolean fromTargetApp,
-            ParceledListSlice channels
+            ParceledListSlice channelsList
     ) throws RemoteException;
 
     void enqueueNotificationWithTag(
@@ -21,6 +20,14 @@ public interface INotificationManager extends IInterface {
             String tag,
             int id,
             Notification notification,
+            int userId
+    ) throws RemoteException;
+
+    void cancelNotificationWithTag(
+            String pkg,
+            String opPkg,
+            String tag,
+            int id,
             int userId
     ) throws RemoteException;
 
