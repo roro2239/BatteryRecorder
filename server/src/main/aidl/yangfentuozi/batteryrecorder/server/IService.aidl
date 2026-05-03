@@ -5,7 +5,8 @@ import yangfentuozi.batteryrecorder.shared.config.dataclass.ServerSettings;
 import yangfentuozi.batteryrecorder.shared.data.RecordsFile;
 
 interface IService {
-    void stopService() = 1;
+    void restartServer(String nativeLibraryDir) = 0;
+    void stopServer() = 1;
     int getVersion() = 2;
 
     RecordsFile getCurrRecordsFile() = 10;

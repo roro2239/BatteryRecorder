@@ -3,9 +3,9 @@ package yangfentuozi.batteryrecorder.server.sampler
 import yangfentuozi.batteryrecorder.shared.data.BatteryStatus
 import yangfentuozi.batteryrecorder.shared.util.LoggerX
 
-abstract class Sampler {
+private const val TAG = "Sampler"
 
-    private val tag = "Sampler"
+abstract class Sampler {
 
     abstract fun sample(): BatteryData
 
@@ -28,8 +28,8 @@ abstract class Sampler {
         if (!printedWarning) {
             // 只打印一次 log
             LoggerX.w(
-                tag,
-                "normalizeSysfsVoltageToMicroVolt: voltage_now 口径异常, raw=$rawVoltage normalized=$normalizedVoltage"
+                TAG,
+                "normalizeVoltageToMicroVolt: voltage_now 口径异常, raw=$rawVoltage normalized=$normalizedVoltage"
             )
             printedWarning = true
         }

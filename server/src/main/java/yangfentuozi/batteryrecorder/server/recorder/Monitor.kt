@@ -1,5 +1,6 @@
 package yangfentuozi.batteryrecorder.server.recorder
 
+import android.annotation.SuppressLint
 import android.app.ActivityManager.RunningTaskInfo
 import android.app.ActivityTaskManager.RootTaskInfo
 import android.app.IActivityTaskManager
@@ -543,6 +544,7 @@ class Monitor(
      *
      * @return 无；状态不满足时会主动释放已持有的唤醒锁。
      */
+    @SuppressLint("WakelockTimeout")
     @Synchronized
     private fun updatePreciseScreenOffWakeLockState() {
         val shouldHoldWakeLock =

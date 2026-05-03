@@ -9,10 +9,10 @@ import androidx.annotation.Keep
 import yangfentuozi.batteryrecorder.shared.data.BatteryStatus
 import yangfentuozi.batteryrecorder.shared.util.LoggerX
 
+private const val TAG = "DumpsysSampler"
+
 @Keep
 class DumpsysSampler : Sampler() {
-
-    private val tag = "DumpsysSampler"
 
     private val batteryService = ServiceManager.getService("battery")
     private var registrar: IBatteryPropertiesRegistrar =
@@ -25,7 +25,7 @@ class DumpsysSampler : Sampler() {
     private external fun nativeParseBatteryDumpPfd(pfd: ParcelFileDescriptor): LongArray
 
     init {
-        LoggerX.d(tag, "init: 启用 Dumpsys 回退采样器")
+        LoggerX.d(TAG, "init: 启用 Dumpsys 回退采样器")
     }
 
     private var printedWarning = false
@@ -41,7 +41,7 @@ class DumpsysSampler : Sampler() {
             try {
                 batteryService.dump(writeSide.fileDescriptor, arrayOf())
             } catch (e: Exception) {
-                LoggerX.e(tag, "@dumpThread: dump 失败", tr = e)
+                LoggerX.e(TAG, "@dumpThread: dump 失败", tr = e)
             } finally {
                 writeSide.close()
             }
@@ -70,7 +70,7 @@ class DumpsysSampler : Sampler() {
                 temp = (result.getOrNull(1) ?: 0).toInt()
             } catch (e: UnsatisfiedLinkError) {
                 if (!printedWarning) {
-                    LoggerX.d(tag, "sample: JNI 未加载，回退 Kotlin 解析 dump 输出流", tr = e)
+                    LoggerX.d(TAG, "sample: JNI 未加载，回退 Kotlin 解析 dump 输出流", tr = e)
                     printedWarning = true
                 }
                 ParcelFileDescriptor.AutoCloseInputStream(readSide).bufferedReader().use { reader ->
@@ -96,13 +96,13 @@ class DumpsysSampler : Sampler() {
                 readSideAutoClosed = true
             }
         } catch (e: Exception) {
-            LoggerX.e(tag, "sample: 读取 dump 输出流失败", tr = e)
+            LoggerX.e(TAG, "sample: 读取 dump 输出流失败", tr = e)
         } finally {
             if (!readSideAutoClosed) {
                 try {
                     readSide.close()
                 } catch (e: Exception) {
-                    LoggerX.w(tag, "sample: 关闭 readSide 失败", tr = e)
+                    LoggerX.w(TAG, "sample: 关闭 readSide 失败", tr = e)
                 }
             }
         }
@@ -115,7 +115,7 @@ class DumpsysSampler : Sampler() {
             temp = temp
         ).also { data ->
             LoggerX.v(
-                tag,
+                TAG,
                 "sample: 采样诊断 rawStatus=%d status=%s voltage=%d current=%d capacity=%d temp=%d",
                 rawStatus,
                 status,

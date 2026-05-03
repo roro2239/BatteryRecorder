@@ -9,10 +9,11 @@ import java.io.EOFException
 import java.io.IOException
 import java.io.InputStream
 
+private const val TAG = "StreamReader"
+
 class StreamReader(
     inputStream: InputStream
 ): Closeable {
-    private val tag = "StreamReader"
     private val input = DataInputStream(inputStream)
 
     /**
@@ -60,7 +61,7 @@ class StreamReader(
                     PowerRecordWriter.WriterStatusData(lastStatus, chargeDataWriterStatusData, dischargeDataWriterStatusData)
                 }
                 else -> {
-                    LoggerX.e(tag, "readNext: 不支持的版本: $ver")
+                    LoggerX.e(TAG, "readNext: 不支持的版本: $ver")
                     null
                 }
             }

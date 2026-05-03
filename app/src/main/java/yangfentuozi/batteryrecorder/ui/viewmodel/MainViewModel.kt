@@ -21,7 +21,7 @@ import yangfentuozi.batteryrecorder.data.history.PredictionResult
 import yangfentuozi.batteryrecorder.data.history.SceneStats
 import yangfentuozi.batteryrecorder.ipc.Service
 import yangfentuozi.batteryrecorder.shared.config.SettingsConstants
-import yangfentuozi.batteryrecorder.shared.data.BatteryStatus
+import yangfentuozi.batteryrecorder.shared.config.dataclass.StatisticsSettings
 import yangfentuozi.batteryrecorder.shared.data.RecordsFile
 import yangfentuozi.batteryrecorder.shared.util.LoggerX
 import yangfentuozi.batteryrecorder.ui.model.CurrentRecordUiState
@@ -30,7 +30,6 @@ import yangfentuozi.batteryrecorder.ui.model.LiveRecordSample
 import yangfentuozi.batteryrecorder.ui.stateholder.LiveRecordSessionStateHolder
 import yangfentuozi.batteryrecorder.usecase.home.ExportLogsUseCase
 import yangfentuozi.batteryrecorder.usecase.home.LoadHomeStatsUseCase
-import yangfentuozi.batteryrecorder.shared.config.dataclass.StatisticsSettings
 
 private const val TAG = "MainViewModel"
 
@@ -124,7 +123,7 @@ class MainViewModel : ViewModel() {
             LoggerX.i(TAG, "[首页] 用户请求停止服务")
         }
         Thread {
-            Service.service?.stopService()
+            Service.service?.stopServer()
         }.start()
     }
 

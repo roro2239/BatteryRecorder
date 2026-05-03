@@ -14,9 +14,9 @@ import yangfentuozi.hiddenapi.compat.ServiceManagerCompat
 import java.io.IOException
 import kotlin.system.exitProcess
 
-class NotificationServer {
+private const val TAG = "NotificationServer"
 
-    private val tag = "NotificationServer"
+class NotificationServer {
 
     @Volatile
     var isStopped = false
@@ -30,9 +30,9 @@ class NotificationServer {
     val serverSocket: LocalServerSocket
     val serverThread = Thread({
         try {
-            LoggerX.i(tag, "@serverRunnable: 等待客户端")
+            LoggerX.i(TAG, "@serverRunnable: 等待客户端")
             socket = serverSocket.accept()
-            LoggerX.i(tag, "@serverRunnable: 接受客户端")
+            LoggerX.i(TAG, "@serverRunnable: 接受客户端")
             reader = StreamReader(socket!!.inputStream)
             while (!isStopped) {
                 when (val message = reader!!.readNext() ?: break) {
@@ -49,7 +49,7 @@ class NotificationServer {
                 }
             }
         } catch (e: IOException) {
-            if (!isStopped) LoggerX.e(tag, "@serverRunnable: 处理客户端请求时出现异常", tr = e)
+            if (!isStopped) LoggerX.e(TAG, "@serverRunnable: 处理客户端请求时出现异常", tr = e)
         } finally {
             reader?.let { runCatching { it.close() } }
             socket?.let { runCatching { it.close() } }
@@ -62,7 +62,7 @@ class NotificationServer {
 
     init {
         LoggerX.i(
-            tag,
+            TAG,
             "init: NotificationServer 初始化开始, uid=${Os.getuid()}"
         )
         if (Looper.getMainLooper() == null) {
@@ -72,17 +72,17 @@ class NotificationServer {
         Handlers.initMainThread()
 
         if (Os.getuid() != 2000) {
-            LoggerX.i(tag, "init: uid 不为 2000, 执行降权")
+            LoggerX.i(TAG, "init: uid 不为 2000, 执行降权")
             @Suppress("DEPRECATION")
             Os.setuid(2000)
         }
 
-        LoggerX.i(tag, "init: 等待 notification, activity 服务")
+        LoggerX.i(TAG, "init: 等待 notification, activity 服务")
         ServiceManagerCompat.waitService("notification")
         ServiceManagerCompat.waitService("activity")
         notificationUtil = LocalNotificationUtil()
 
-        LoggerX.i(tag, "init: 创建 LocalServerSocket 通信服务")
+        LoggerX.i(TAG, "init: 创建 LocalServerSocket 通信服务")
         serverSocket = LocalServerSocket(SOCKET_NAME)
 
         Runtime.getRuntime().addShutdownHook(Thread { this.stopServiceImmediately() })
@@ -96,7 +96,7 @@ class NotificationServer {
 
     private fun stopServiceImmediately() {
         if (cleanedUp) return
-        LoggerX.i(tag, "停止服务")
+        LoggerX.i(TAG, "停止服务")
         cleanedUp = true
         isStopped = true
         runCatching {

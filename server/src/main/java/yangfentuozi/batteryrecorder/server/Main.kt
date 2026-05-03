@@ -11,7 +11,6 @@ import yangfentuozi.batteryrecorder.shared.util.LoggerX
 import java.io.File
 import java.io.IOException
 
-
 @Keep
 object Main {
 

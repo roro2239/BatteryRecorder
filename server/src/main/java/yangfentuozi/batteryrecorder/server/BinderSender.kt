@@ -10,15 +10,19 @@ import yangfentuozi.hiddenapi.compat.ActivityManagerCompat.UID_OBSERVER_IDLE
 import yangfentuozi.hiddenapi.compat.ProcessObserverAdapter
 import yangfentuozi.hiddenapi.compat.UidObserverAdapter
 
-@Keep
-class BinderSender(private val sendBinder: () -> Unit) {
-    private val tag = "BinderSender"
+private const val BinderSenderTAG = "BinderSender"
+private const val UidObserverTAG = "UidObserver"
 
+@Keep
+class BinderSender(
+    private val appUid: Int,
+    private val sendBinder: () -> Unit
+) {
     init {
         try {
             ActivityManagerCompat.registerProcessObserver(ProcessObserver())
         } catch (tr: Throwable) {
-            LoggerX.e(tag, "registerProcessObserver", tr = tr)
+            LoggerX.e(BinderSenderTAG, "registerProcessObserver", tr = tr)
         }
 
         val flags: Int =
@@ -28,7 +32,7 @@ class BinderSender(private val sendBinder: () -> Unit) {
                 UidObserver(), flags, ActivityManagerCompat.PROCESS_STATE_UNKNOWN, null
             )
         } catch (tr: Throwable) {
-            LoggerX.e(tag, "registerUidObserver", tr = tr)
+            LoggerX.e(BinderSenderTAG, "registerUidObserver", tr = tr)
         }
         sendBinder()
     }
@@ -44,7 +48,7 @@ class BinderSender(private val sendBinder: () -> Unit) {
                 "onForegroundActivitiesChanged: pid=$pid, uid=$uid, foregroundActivities=$foregroundActivities"
             )
 
-            if (uid == Global.appUid) sendBinder()
+            if (uid == appUid) sendBinder()
         }
 
         override fun onProcessDied(pid: Int, uid: Int) {
@@ -56,21 +60,20 @@ class BinderSender(private val sendBinder: () -> Unit) {
                 tag, "onProcessStateChanged: pid=$pid, uid=$uid, procState=$procState"
             )
 
-            if (uid == Global.appUid) sendBinder()
+            if (uid == appUid) sendBinder()
         }
     }
 
-    inner class UidObserver : UidObserverAdapter() {
-        private val tag = "UidObserver"
+    private inner class UidObserver : UidObserverAdapter() {
         override fun onUidActive(uid: Int) {
-            LoggerX.d(tag, "onUidCachedChanged: uid=$uid")
+            LoggerX.d(UidObserverTAG, "onUidCachedChanged: uid=$uid")
 
             uidStarts(uid)
         }
 
         override fun onUidCachedChanged(uid: Int, cached: Boolean) {
             LoggerX.d(
-                tag, "onUidCachedChanged: uid=$uid, cached=$cached"
+                UidObserverTAG, "onUidCachedChanged: uid=$uid, cached=$cached"
             )
 
             if (!cached) {
@@ -80,7 +83,7 @@ class BinderSender(private val sendBinder: () -> Unit) {
 
         override fun onUidIdle(uid: Int, disabled: Boolean) {
             LoggerX.d(
-                tag, "onUidIdle: uid=$uid, disabled=$disabled"
+                UidObserverTAG, "onUidIdle: uid=$uid, disabled=$disabled"
             )
 
             uidStarts(uid)
@@ -88,12 +91,12 @@ class BinderSender(private val sendBinder: () -> Unit) {
 
         override fun onUidGone(uid: Int, disabled: Boolean) {
             LoggerX.d(
-                tag, "onUidGone: uid=$uid, disabled=$disabled"
+                UidObserverTAG, "onUidGone: uid=$uid, disabled=$disabled"
             )
         }
 
         fun uidStarts(uid: Int) {
-            if (uid == Global.appUid) sendBinder()
+            if (uid == appUid) sendBinder()
         }
     }
 }

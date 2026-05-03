@@ -2,14 +2,15 @@ package yangfentuozi.batteryrecorder.server.notification.server
 
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
-import yangfentuozi.batteryrecorder.server.Global
 import yangfentuozi.batteryrecorder.server.Main
 import yangfentuozi.batteryrecorder.server.notification.server.stream.StreamWriter
 import yangfentuozi.batteryrecorder.shared.util.Handlers
 import yangfentuozi.batteryrecorder.shared.util.LoggerX
 import java.io.IOException
 
-class ChildServerBridge {
+class ChildServerBridge(
+    private val apkPath: String
+) {
     private val tag = "Bridge"
 
     private var retryCount = 0
@@ -76,7 +77,7 @@ class ChildServerBridge {
         if (retryCount > retryMaxTimes) throw RuntimeException("NotificationServer 多次启动失败")
         process = ProcessBuilder(
             "app_process",
-            "-Djava.class.path=${Global.appSourceDir}",
+            "-Djava.class.path=$apkPath",
             "/system/bin",
             Main::class.java.name,
             "--notification-server"
