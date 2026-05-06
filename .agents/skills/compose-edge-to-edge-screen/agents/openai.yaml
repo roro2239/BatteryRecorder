@@ -1,4 +1,0 @@
-interface:
-  display_name: "沉浸页面修改"
-  short_description: "修改 Compose 页面沉浸和 inset 规则"
-  default_prompt: "使用 $compose-edge-to-edge-screen 按 BatteryRecorder 当前 edge-to-edge 规则修改 Compose 页面，并保持 Scaffold 与底部手势区处理一致。"

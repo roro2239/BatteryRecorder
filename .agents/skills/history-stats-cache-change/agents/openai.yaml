@@ -1,4 +1,0 @@
-interface:
-  display_name: "历史缓存改动"
-  short_description: "修改历史统计缓存时的固定检查流程"
-  default_prompt: "使用 $history-stats-cache-change 按 BatteryRecorder 当前缓存规则完成历史统计缓存改动，并补齐版本和一致性检查。"
